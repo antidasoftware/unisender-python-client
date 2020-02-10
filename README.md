@@ -133,6 +133,6 @@ success = cl.create_email_campaign(
 ```
 - **email_type** [str] - one of "html", "template" or "system_template"
 - **email_data*** [dict] - email message data. See more about email data in ["createEmailMessage" docs](https://www.unisender.com/ru/support/api/messages/createemailmessage/)
-- **recipints*** [list] - each list item must be represented by a dictionary with the same set of keys. Dictionary keys can be used in a email template.
+- **recipints*** [list] - each list item must be represented by a dictionary with the same set of keys. Dictionary keys can be used in a email template
 - **start_time** [datetime] - mailing start time
 - **timezone** [str] - time zone that indicates propagation time. Available only "UTC" (default: time zone from your account settings)
