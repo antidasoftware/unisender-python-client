@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import requests
-from datetime import datetime
 from copy import deepcopy
 from unisender.client import Client
 from unisender.utils import get_unique_hash
@@ -10,41 +9,65 @@ class SimpleClient(Client):
 
     """ This class represents the client for simple mailing """
 
-    EMAIL_TYPES = ['html', 'template', 'system_template']
-    COMMON_EMAIL_ARGS = ['sender_name', 'sender_email', 'list_id']
+    COMMON_EMAIL_ARGS = []
     REQUIRED_EMAIL_ARGS = {
-        'html': COMMON_EMAIL_ARGS + ['body', 'subject'],
-        'template': COMMON_EMAIL_ARGS + ['template_id'],
-        'system_template': COMMON_EMAIL_ARGS + ['system_template_id'],
+        'html': ['sender_name', 'sender_email', 'body', 'subject'],
+        'template':  ['sender_name', 'sender_email']
     }
     EMAIL_SYSTEM_FIELDS = {
         'delete', 'tags', 'email', 'email_status', 'email_availability', 'email_list_ids',
         'email_subscribe_times', 'email_unsubscribed_list_ids', 'email_excluded_list_ids'
     }
     ERROR_MESSAGES = {
-        'email_missing_fields':   'Please fill "email_data" required field(s): %s',
-        'email_recipients_empty': 'The recipient list should not be empty!',
+        'email_data_error':       'UniSender client error: Please fill correct "email_data" fields',
+        'email_missing_fields':   'UniSender client error: Please fill "email_data" required field(s): %s',
+        'email_recipients_empty': 'UniSender client error: The recipient list should not be empty!',
+        'request_error':          'UniSender client error: Request failed [status: %s] [URL: %s] Details: %s',
     }
 
-    def after_request(self, response):
+    def _validate_recipients(self, recipients: list) -> None:
+        if not recipients:
+            raise Exception(self.ERROR_MESSAGES['email_recipients_empty'])
 
-        """ Raises HTTPError for failed API request """
-        response.raise_for_status()
+    def _validate_email_data(self, data: dict) -> None:
 
-    def _validate_email_data(self, email_type: EMAIL_TYPES, email_data: dict) -> None:
+        """ Checks required fields for `create_email_message` method """
 
-        """
-        Checks required params in `email_data` by given email_type
-
-        :param email_type: str, one of `EMAIL_TYPES`
-        :param email_data: dict, data for `create_email_message` method
-        """
+        is_template = any(elem in data.keys() for elem in ['template_id', 'system_template_id'])
+        is_html = any(elem in data.keys() for elem in ['text_body', 'body'])
+        if is_template:
+            email_type = 'template'
+        elif is_html:
+            email_type = 'html'
+        else:
+            raise Exception(self.ERROR_MESSAGES["email_data_error"])
 
         try:
-            assert set(self.REQUIRED_EMAIL_ARGS[email_type]) <= set(email_data.keys())
+            assert set(self.REQUIRED_EMAIL_ARGS[email_type]) <= set(data.keys())
         except AssertionError:
-            fields = set(self.REQUIRED_EMAIL_ARGS[email_type]) - set(email_data.keys())
+            fields = set(self.REQUIRED_EMAIL_ARGS[email_type]) - set(data.keys())
             raise Exception(self.ERROR_MESSAGES['email_missing_fields'] % ', '.join(fields))
+
+    def _validate_response(self, response: requests.Response) -> None:
+
+        """ Raise Exception for failed API response """
+
+        if response.status_code == requests.codes.ok:
+            error = response.json().get('error')
+            if error is not None:
+                raise Exception(
+                    self.ERROR_MESSAGES['request_error'] % (response.status_code, response.request.url, error)
+                )
+        else:
+            raise Exception(
+                self.ERROR_MESSAGES['request_error'] % (response.status_code, response.request.url, 'HTTP error')
+            )
+
+    def after_request(self, response: requests.Response) -> None:
+
+        """ Check API response """
+
+        self._validate_response(response)
 
     def find_list_id(self, title: str):
 
@@ -146,22 +169,17 @@ class SimpleClient(Client):
                 data.append([str(contact[key]) for key in field_names])
             return data
 
-        try:
-            assert len(recipients)
-        except AssertionError:
-            raise Exception(self.ERROR_MESSAGES['email_recipients_empty'])
-        else:
-            if not email_list_ids:
-                email_list_ids = []
-            field_names = _create_contacts_field_names(recipients)
-            data = _create_contacts_data(field_names, recipients, email_list_ids)
-            self.create_fields(field_names)
-            return self._api_request(
-                method='import_contacts',
-                field_names=field_names,
-                data=data,
-                overwrite_lists=1
-            )
+        if not email_list_ids:
+            email_list_ids = []
+        field_names = _create_contacts_field_names(recipients)
+        data = _create_contacts_data(field_names, recipients, email_list_ids)
+        self.create_fields(field_names)
+        return self._api_request(
+            method='import_contacts',
+            field_names=field_names,
+            data=data,
+            overwrite_lists=1
+        )
 
     def create_email_message(self, **data) -> requests.Response:
 
@@ -181,103 +199,102 @@ class SimpleClient(Client):
             data['categories'] = ','.join(str(el) for el in categories)
         return self._api_request(method='create_email_message', **data)
 
-    def create_email_campaign(self, recipients: list, email_data: dict, email_type: EMAIL_TYPES,
-                              start_time: datetime, track_read=1, **kwargs) -> bool:
+    def create_email_campaign(self, recipients: list, email_data: dict, campaign_data=None) -> int:
 
         """
         Performs a sequence of API operations to creating email campaign
 
         :param recipients: list, of dictionaries that represents contacts data
         :param email_data: dict, data for `create_email_message` method
-        :param email_type: str, one of `EMAIL_TYPES`
-        :param start_time: datetime, mailing start time
-        :param track_read: bool, track reading a letter
-        :param kwargs:     dict, additional campaign params
-        :return:
+        :param campaign_data: None|dict, data for `create_campaign` method
+        :return: int, campaign id
 
         .. note::
             Sequence of API operations:
-                1. create_list
+                1. get or create list
                 2. create_fields
                 3. import_contacts
                 4. create_email_message
                 5. create_campaign
 
             Usage example:
-                from datetime import datetime, timedelta
+            # -----------------
+            from datetime import datetime, timedelta
+            from unisender import SimpleClient
 
-                recipients = [
-                    {'email': 'example_3@gmail.com', 'name': 'Dave Guard'},
-                    {'email': 'example_4@mail.ru', 'name': 'Bon Shane'},
-                    {'email': 'example_5@yandex.ru', 'name': 'Nick Reynolds'},
-                ]
-                time_now = datetime.now() + timedelta(hours=2)
-                time_delay = datetime.now() + timedelta(hours=2)
-                fixed_time = datetime.strptime('2020-02-07 17:00', '%Y-%m-%d %H:%M')
+            client = SimpleClient(api_key, platform="example")
+            recipients = [
+                {'email': 'example_3@gmail.com', 'name': 'Dave Guard'},
+                {'email': 'example_4@mail.ru', 'name': 'Bon Shane'},
+                {'email': 'example_5@yandex.ru', 'name': 'Nick Reynolds'},
+            ]
+            time_delay = datetime.now() + timedelta(hours=2)
 
-                1. Send custom email message with body as HTML:
+            # 1. Send custom email message (with body as HTML) now:
 
-                    create_email_campaign(
-                        email_type='html',
-                        email_data={
-                            "subject":     'Mail subject',
-                            "sender_name": 'John Lenon',
-                            "sender_email": 'example_1@gmail.com',
-                            "body": '<html>...</html>',
-                            "categories": ['First', 'Second']
-                        },
-                        recipients=recipients,
-                        start_time=time_now,
-                    )
+            client.create_email_campaign(
+                recipients,
+                email_data={
+                    "subject":     'Mail subject',
+                    "sender_name": 'John Lenon',
+                    "sender_email": 'example_1@gmail.com',
+                    "body": '<html>...</html>',
+                    "categories": ['First', 'Second']
+                }
+            )
 
-                2. Send email message from UniSender custom template:
+            # 2. Send delayed email message (from UniSender custom template) :
 
-                    create_email_campaign(
-                        email_type='template',
-                        email_data={
-                            "sender_name": 'John Lenon',
-                            "sender_email": 'example_1@gmail.com',
-                            "template_id": 4185485
-                        },
-                        recipients=recipients,
-                        start_time=time_delay,
-                    )
+            client.create_email_campaign(
+                recipients=recipients,
+                email_data={
+                    "sender_name": 'John Lenon',
+                    "sender_email": 'example_1@gmail.com',
+                    "template_id": 4185485
+                },
+                campaign_data={
+                    "start_time": time_delay
+                }
+            )
 
+            # 3. Send delayed email message (from UniSender system template) with UTC time zone:
 
-                3. Send email message from UniSender system template:
-
-                    create_email_campaign(
-                        email_type='system_template',
-                        email_data={
-                            "sender_name": 'John Lenon',
-                            "sender_email": 'example_1@gmail.com',
-                            "system_template_id": 54485
-                        },
-                        recipients=recipients,
-                        start_time=fixed_time,
-                        timezone='UTC'
-                    )
+            client.create_email_campaign(
+                recipients=recipients,
+                email_data={
+                    "sender_name": 'John Lenon',
+                    "sender_email": 'example_1@gmail.com',
+                    "system_template_id": 54485
+                },
+                campaign_data={
+                    start_time=time_delay,
+                    timezone='UTC'
+                }
+            )
         """
+
+        self._validate_recipients(recipients)
+        self._validate_email_data(email_data)
 
         recipients_hash = get_unique_hash(recipients)
         list_title = f'mailing_list_{recipients_hash}'
-        response = self.create_list(title=list_title)
-        if response.json().get('result'):
+        list_id = self.find_list_id(list_title)
+        if list_id is None:
+            response = self.create_list(title=list_title)
             list_id = response.json()['result']['id']
-        else:
-            list_id = self.find_list_id(list_title)
-        assert list_id is not None
+
         email_data['list_id'] = list_id
+
         self.import_contacts(recipients, email_list_ids=[list_id])
-        self._validate_email_data(email_type, email_data)
         response = self.create_email_message(**email_data)
-        message_id = response.json()['result']['message_id']
-        response = self._api_request(
-            method='create_campaign',
-            message_id=message_id,
-            start_time=start_time.strftime("%Y-%m-%d %H:%M"),
-            track_read=track_read,
-            **kwargs
-        )
-        success = response.ok and not response.json().get('error')
-        return success
+
+        if campaign_data is None:
+            campaign_data = {}
+        campaign_data['message_id'] = response.json()['result']['message_id']
+        start_time = campaign_data.get('start_time')
+        if start_time:
+            campaign_data['start_time'] = start_time.strftime("%Y-%m-%d %H:%M")
+
+        response = self._api_request(method='create_campaign', **campaign_data)
+        return response.json()['result']['campaign_id']
+
