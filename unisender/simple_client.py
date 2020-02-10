@@ -202,12 +202,12 @@ class SimpleClient(Client):
     def create_email_campaign(self, recipients: list, email_data: dict, campaign_data=None) -> int:
 
         """
-        Performs a sequence of API operations to creating email campaign
+        Makes a set of API operations for creating email campaign
 
         :param recipients: list, of dictionaries that represents contacts data
         :param email_data: dict, data for `create_email_message` method
         :param campaign_data: None|dict, data for `create_campaign` method
-        :return: int, campaign id
+        :return: int, created campaign id
 
         .. note::
             Sequence of API operations:
@@ -298,3 +298,74 @@ class SimpleClient(Client):
         response = self._api_request(method='create_campaign', **campaign_data)
         return response.json()['result']['campaign_id']
 
+    def create_many_email_campaigns(self, campaigns: list, recipients: list,
+                                    default_email_data=None, default_campaign_data=None):
+
+        """
+        Create many email campaigns. Makes a set of calls the "create_email_campaign" method
+
+        :param campaigns: list, see example below
+        :param recipients: list of dictionaries, represents contacts data
+        :param default_email_data: None|dict, default data for `create_email_message` method
+        :param default_campaign_data: None|dict, default data for `create_campaign` method
+        :return: list, created campaigns ids
+
+        ..note::
+
+            Usage example:
+            # -----------------
+            from datetime import datetime, timedelta
+            from unisender import SimpleClient
+
+            client = SimpleClient(api_key, platform="example")
+            time_delay_1 = datetime.now() + timedelta(hours=1)
+            time_delay_4 = datetime.now() + timedelta(hours=4)
+
+            # Send many delayed email messages (from UniSender custom template):
+
+            campaign_ids = client.create_many_email_campaigns(
+                default_email_data={
+                    "sender_name": sender_name,
+                    "sender_email": sender_email
+                },
+                default_campaign_data={
+                    "timezone": 'UTC',
+                    "start_time": time_delay_1
+                },
+                campaigns=[
+                    {
+                        "email_data": {"template_id": 3140875},
+                        "campaign_data": {"start_time": time_delay_4}
+                    },
+                    {
+                        "email_data": {"template_id": 3140875},
+                        "campaign_data": {"start_time": time_delay_4}
+                    }
+                ],
+                recipients=[
+                    {'email': 'example_3@gmail.com', 'name': 'Dave Guard'},
+                    {'email': 'example_4@mail.ru', 'name': 'Bon Shane'},
+                    {'email': 'example_5@yandex.ru', 'name': 'Nick Reynolds'},
+                ]
+            )
+        """
+
+        campaign_ids = []
+        for campaign_num, campaign in enumerate(campaigns):
+            if default_email_data is not None:
+                for key, val in default_email_data.keys():
+                    campaign['email_data'].setdefault(key, val)
+            if default_campaign_data is not None:
+                for key, val in default_campaign_data.keys():
+                    campaign['campaign_data'].setdefault(key, val)
+            try:
+                campaign_id = self.create_email_campaign(
+                    recipients=recipients,
+                    email_data=campaign['email_data'],
+                    campaign_data=campaign['campaign_data']
+                )
+            except Exception as e:
+                raise Exception(f'{e}. Campaign number: {campaign_num}')
+            else:
+                campaign_ids.append(campaign_id)
+        return campaign_ids
