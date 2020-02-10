@@ -35,8 +35,8 @@ cl = Client(
 - **base_url** [str] - API URL (default: "https://api.unisender.com")
 - **lang** [str] - API messages language, available: "ru", "en", "it" (default: "en")
 - **format** [str] - API response format, only "json" (default: "json")
-- **api_key*** [str] - Unisender account API key
-- **platform*** [str] - API tracking marker
+- **api_key*** [str] - UniSender account API key
+- **platform*** [str] - API tracking marker (any string)
 
 ##### API Methods call example
 
@@ -76,11 +76,11 @@ recipients = [
 ]
 ```
 SimpleClient provide **create_email_campaign** method for quick start mailing.
-Method return True if campaign created successfully (else False).
+Method return boolean "True" value if campaign created successfully (else "False").
 
 There are three mailing modes:
 
- 1. Send custom email message with body as HTML:
+1. Send custom HTML-email message:
 ```python
 time_now = datetime.now() + timedelta(hours=2)
 
@@ -131,8 +131,8 @@ success = cl.create_email_campaign(
     timezone='UTC'
 )
 ```
-- **email_type** [str] - one of "html", "template", "system_template"
-- **email_data*** [dict] - email message data. Fields description see in ["createEmailMessage" docs](https://www.unisender.com/ru/support/api/messages/createemailmessage/)
-- **recipints*** [list] - recipient list, will be imported into the API as contacts
+- **email_type** [str] - one of "html", "template" or "system_template"
+- **email_data*** [dict] - email message data. See more about email data in ["createEmailMessage" docs](https://www.unisender.com/ru/support/api/messages/createemailmessage/)
+- **recipints*** [list] - each list item must be represented by a dictionary with the same set of keys. Dictionary keys can be used in a email template.
 - **start_time** [datetime] - mailing start time
 - **timezone** [str] - time zone that indicates propagation time. Available only "UTC" (default: time zone from your account settings)
