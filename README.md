@@ -4,7 +4,7 @@
 Python open source client for [UniSender API](https://www.unisender.com/ru/support/api/api/)
 
 ### Features
-- Client for low-level access.
+- Client for low-level access
 - SimpleClient to quickly start mailing
 
 ### Requirements
@@ -25,9 +25,9 @@ Create an account in the [service](https://www.unisender.com) and get the API ke
 from unisender import Client
 
 cl = Client(
-  api_key="your_api_key",
-  platform="example",
-  lang="ru"
+    api_key="your_api_key",
+    platform="example",
+    lang="ru"
 )
 ```
 ##### Client configuration
@@ -35,7 +35,7 @@ cl = Client(
 - **base_url** [str] - API URL (default: "https://api.unisender.com")
 - **lang** [str] - API messages language, available: "ru", "en", "it" (default: "en")
 - **format** [str] - API response format, only "json" (default: "json")
-- **api_key*** [str] - Unisender account api key,
+- **api_key*** [str] - Unisender account API key
 - **platform*** [str] - API tracking marker
 
 ##### API Methods call example
@@ -48,7 +48,7 @@ cl.create_field(name='username', type='string')
 
 # import contacts to API
 response = cl.import_contacts(
-	field_names=['email', 'name'],
+    field_names=['email', 'name'],
     data=[
         ['example1@gmail.com', 'John Lennon'],
         ['example2@gmail.com', 'Paul McCartney']
@@ -58,26 +58,33 @@ response = cl.import_contacts(
 
 ### Advanced usage
 
-For fast mailing start your need use SimpleClient.
+For fast mailing use SimpleClient:
 
 ```python
+from unisender import SimpleClient
 from datetime import datetime, timedelta
 
+cl = SimpleClient(
+    api_key="your_api_key",
+    platform="example",
+    lang="ru"
+)
 recipients = [
     {'email': 'example_3@gmail.com', 'name': 'Dave Guard'},
     {'email': 'example_4@mail.ru', 'name': 'Bon Shane'},
     {'email': 'example_5@yandex.ru', 'name': 'Nick Reynolds'},
 ]
 ```
- SimpleClient provide **create_email_campaign** method for quick start mailing.
+SimpleClient provide **create_email_campaign** method for quick start mailing.
+Method return True if campaign created successfully (else False).
 
- There are three mailing modes:
+There are three mailing modes:
 
- 1. Send custom email message with body as HTML
+ 1. Send custom email message with body as HTML:
 ```python
 time_now = datetime.now() + timedelta(hours=2)
 
-create_email_campaign(
+success = cl.create_email_campaign(
     email_type='html',
     email_data={
         "subject":     'Mail subject',
@@ -96,7 +103,7 @@ create_email_campaign(
 ```python
 time_delay = datetime.now() + timedelta(hours=2)
 
-create_email_campaign(
+success = cl.create_email_campaign(
     email_type='template',
     email_data={
         "sender_name": 'John Lenon',
@@ -112,7 +119,7 @@ create_email_campaign(
 ``` python
 fixed_time = datetime.strptime('2020-02-07 17:00', '%Y-%m-%d %H:%M')
 
-create_email_campaign(
+success = cl.create_email_campaign(
     email_type='system_template',
     email_data={
         "sender_name": 'John Lenon',
