@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="python-unisender",
+    name="unisender-python-client",
     version="0.0.1",
     author="Azat Zakirov",
     author_email="zakirmalay@gmail.com",
