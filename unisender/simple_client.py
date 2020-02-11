@@ -11,6 +11,7 @@ class SimpleClient(Client):
 
     COMMON_EMAIL_ARGS = []
     REQUIRED_EMAIL_ARGS = {
+        'text': ['sender_name', 'sender_email', 'text_body', 'subject'],
         'html': ['sender_name', 'sender_email', 'body', 'subject'],
         'template':  ['sender_name', 'sender_email']
     }
@@ -34,11 +35,12 @@ class SimpleClient(Client):
         """ Checks required fields for `create_email_message` method """
 
         is_template = any(elem in data.keys() for elem in ['template_id', 'system_template_id'])
-        is_html = any(elem in data.keys() for elem in ['text_body', 'body'])
         if is_template:
             email_type = 'template'
-        elif is_html:
+        elif 'body' in data.keys():
             email_type = 'html'
+        elif 'text_body' in data.keys():
+            email_type = 'text'
         else:
             raise Exception(self.ERROR_MESSAGES["email_data_error"])
 
@@ -352,10 +354,10 @@ class SimpleClient(Client):
         campaign_ids = []
         for campaign_num, campaign in enumerate(campaigns):
             if default_email_data:
-                for key, val in default_email_data.keys():
+                for key, val in default_email_data.items():
                     campaign['email_data'].setdefault(key, val)
             if default_campaign_data and campaign.get('campaign_data'):
-                for key, val in default_campaign_data.keys():
+                for key, val in default_campaign_data.items():
                     campaign['campaign_data'].setdefault(key, val)
             try:
                 campaign_id = self.create_email_campaign(
