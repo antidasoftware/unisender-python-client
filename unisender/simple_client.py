@@ -353,6 +353,8 @@ class SimpleClient(Client):
 
         campaign_ids = []
         for campaign_num, campaign in enumerate(campaigns):
+            campaign.setdefault('email_data', {})
+            campaign.setdefault('campaign_data', {})
             if default_email_data:
                 for key, val in default_email_data.items():
                     campaign['email_data'].setdefault(key, val)
